@@ -248,27 +248,47 @@ class _SimpleMarkdownRenderer extends StatelessWidget {
   }
 
   Widget _buildTable(BuildContext context, TableBlockNode block) {
+    if (block.table.rows.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final columnCount = block.table.rows.first.length;
+    final columnWidths = <int, TableColumnWidth>{};
+    for (var i = 0; i < columnCount; i++) {
+      columnWidths[i] = const FlexColumnWidth();
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Table(
           border: TableBorder.all(color: Colors.grey.shade300),
-          children: block.table.rows.map((row) {
+          columnWidths: columnWidths,
+          defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+          children: block.table.rows.asMap().entries.map((entry) {
+            final rowIndex = entry.key;
+            final row = entry.value;
             return TableRow(
+              decoration: rowIndex == 0
+                  ? BoxDecoration(color: Colors.grey.shade100)
+                  : null,
               children: row.map((cell) {
+                final cellText = cell.blocks
+                    .whereType<TextBlockNode>()
+                    .expand((b) => b.content)
+                    .whereType<TextRun>()
+                    .map((r) => r.text)
+                    .join();
                 return Padding(
                   padding: const EdgeInsets.all(8),
                   child: Text(
-                    cell.blocks
-                        .whereType<TextBlockNode>()
-                        .expand((b) => b.content)
-                        .whereType<TextRun>()
-                        .map((r) => r.text)
-                        .join(),
-                    style: cell.isHeader
-                        ? const TextStyle(fontWeight: FontWeight.bold)
-                        : null,
+                    cellText,
+                    style: TextStyle(
+                      fontWeight:
+                          cell.isHeader ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 14,
+                    ),
                   ),
                 );
               }).toList(),

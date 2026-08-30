@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../core/codecs/markdown_codec.dart';
 import '../core/model/rich_text_document.dart';
 import '../core/model/block_node.dart';
 import '../core/model/inline_node.dart';
+import '../core/model/attributes.dart';
 
 class MarkdownEditor extends StatefulWidget {
   const MarkdownEditor({
@@ -59,7 +59,6 @@ class _MarkdownEditorState extends State<MarkdownEditor> {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        // Editor panel
         Expanded(
           child: Container(
             color: Theme.of(context).colorScheme.surface,
@@ -82,13 +81,11 @@ class _MarkdownEditorState extends State<MarkdownEditor> {
             ),
           ),
         ),
-        // Divider
         VerticalDivider(
           width: 1,
           thickness: 1,
           color: Theme.of(context).dividerColor,
         ),
-        // Preview panel
         Expanded(
           child: Container(
             color: Theme.of(context).colorScheme.surfaceContainerLowest,
@@ -140,8 +137,7 @@ class _SimpleMarkdownRenderer extends StatelessWidget {
     );
   }
 
-  Widget _buildBlock(BuildContext context, dynamic block) {
-    // Import block_node.dart types
+  Widget _buildBlock(BuildContext context, BlockNode block) {
     if (block is TextBlockNode) {
       return _buildTextBlock(context, block);
     } else if (block is CodeBlockNode) {
@@ -160,7 +156,7 @@ class _SimpleMarkdownRenderer extends StatelessWidget {
   }
 
   Widget _buildTextBlock(BuildContext context, TextBlockNode block) {
-    final style = _getTextStyleForType(block.type);
+    final style = _getTextStyle(block);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: RichText(
@@ -174,50 +170,55 @@ class _SimpleMarkdownRenderer extends StatelessWidget {
     );
   }
 
-  TextStyle _getTextStyleForType(String type) {
-    switch (type) {
-      case 'h1':
-        return const TextStyle(fontSize: 24, fontWeight: FontWeight.bold);
-      case 'h2':
-        return const TextStyle(fontSize: 20, fontWeight: FontWeight.bold);
-      case 'h3':
-        return const TextStyle(fontSize: 18, fontWeight: FontWeight.bold);
-      case 'h4':
-        return const TextStyle(fontSize: 16, fontWeight: FontWeight.bold);
-      case 'h5':
-        return const TextStyle(fontSize: 14, fontWeight: FontWeight.bold);
-      case 'h6':
-        return const TextStyle(fontSize: 12, fontWeight: FontWeight.bold);
-      case 'blockquote':
-        return const TextStyle(
-          fontSize: 14,
-          fontStyle: FontStyle.italic,
-          color: Colors.grey,
-        );
-      case 'listItem':
-        return const TextStyle(fontSize: 14);
-      default:
-        return const TextStyle(fontSize: 14);
+  TextStyle _getTextStyle(TextBlockNode block) {
+    if (block.type == BlockType.heading) {
+      final level = block.attributes.level ?? 1;
+      final sizes = {1: 24.0, 2: 20.0, 3: 18.0, 4: 16.0, 5: 14.0, 6: 12.0};
+      return TextStyle(
+        fontSize: sizes[level] ?? 14,
+        fontWeight: FontWeight.bold,
+      );
     }
+    if (block.type == BlockType.quote) {
+      return const TextStyle(
+        fontSize: 14,
+        fontStyle: FontStyle.italic,
+        color: Colors.grey,
+      );
+    }
+    return const TextStyle(fontSize: 14);
   }
 
-  TextSpan _buildInlineNode(BuildContext context, dynamic node) {
+  TextSpan _buildInlineNode(BuildContext context, InlineNode node) {
     if (node is TextRun) {
-      var style = TextStyle(fontSize: 14);
-      if (node.attributes.bold == true) {
+      var style = const TextStyle(fontSize: 14);
+      final attrs = node.attributes;
+      if (attrs.bold == true) {
         style = style.copyWith(fontWeight: FontWeight.bold);
       }
-      if (node.attributes.italic == true) {
+      if (attrs.italic == true) {
         style = style.copyWith(fontStyle: FontStyle.italic);
       }
-      if (node.attributes.code == true) {
+      if (attrs.inlineCode == true) {
         style = style.copyWith(
           fontFamily: 'monospace',
           backgroundColor: Colors.grey.shade200,
         );
       }
-      if (node.attributes.strikethrough == true) {
+      if (attrs.lineThrough == true) {
         style = style.copyWith(decoration: TextDecoration.lineThrough);
+      }
+      if (attrs.underline == true) {
+        style = style.copyWith(decoration: TextDecoration.underline);
+      }
+      if (attrs.color != null) {
+        style = style.copyWith(color: Color(attrs.color!));
+      }
+      if (attrs.url != null) {
+        style = style.copyWith(
+          color: Colors.blue,
+          decoration: TextDecoration.underline,
+        );
       }
       return TextSpan(text: node.text, style: style);
     } else if (node is InlineEmbed) {
@@ -247,31 +248,33 @@ class _SimpleMarkdownRenderer extends StatelessWidget {
   }
 
   Widget _buildTable(BuildContext context, TableBlockNode block) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      child: Table(
-        border: TableBorder.all(color: Colors.grey.shade300),
-        children: block.table.rows.map((row) {
-          return TableRow(
-            children: row.map((cell) {
-              return Padding(
-                padding: const EdgeInsets.all(8),
-                child: Text(
-                  cell.blocks
-                      .whereType<TextBlockNode>()
-                      .expand((b) => b.content)
-                      .whereType<TextRun>()
-                      .map((r) => r.text)
-                      .join(),
-                  style: cell.isHeader
-                      ? const TextStyle(fontWeight: FontWeight.bold)
-                      : null,
-                ),
-              );
-            }).toList(),
-          );
-        }).toList(),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Table(
+          border: TableBorder.all(color: Colors.grey.shade300),
+          children: block.table.rows.map((row) {
+            return TableRow(
+              children: row.map((cell) {
+                return Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Text(
+                    cell.blocks
+                        .whereType<TextBlockNode>()
+                        .expand((b) => b.content)
+                        .whereType<TextRun>()
+                        .map((r) => r.text)
+                        .join(),
+                    style: cell.isHeader
+                        ? const TextStyle(fontWeight: FontWeight.bold)
+                        : null,
+                  ),
+                );
+              }).toList(),
+            );
+          }).toList(),
+        ),
       ),
     );
   }
@@ -279,7 +282,7 @@ class _SimpleMarkdownRenderer extends StatelessWidget {
   Widget _buildImage(BuildContext context, ImageBlockNode block) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Text('[Image: ${block.alt}]'),
+      child: Text('[Image: ${block.altText}]'),
     );
   }
 }

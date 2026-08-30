@@ -2,8 +2,7 @@
     package="com.example.markdown_editor">
     <application
         android:label="Markdown Editor"
-        android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:name="${applicationName}">
         <activity
             android:name=".MainActivity"
             android:exported="true"
